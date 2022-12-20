@@ -1,10 +1,3 @@
-//......................................................................
-// 1. the transfer log, mint-log and order-log gets the blocknumber, estimatedConfirmedAt, and their respective values in eth
-// 2. you can fecth the name of the token, the tokenid and the contract address through the ERC721Token node
-//......................................................................
-
-// import the required dependencies
-
 import { ApolloServer, gql } from "apollo-server";
 import fetch from "node-fetch";
 
@@ -74,7 +67,7 @@ const typeDefs = gql`
   }
 `;
 
-//the resolvers contains the query object and istypeof of the ERC721Token and the log respectively
+//the resolvers contains the query object and istypeof of the ERC721Token
 const resolvers = {
    //lets the GraphQL server to determine the correct type of the ERC721Token at runtime.
   ERC721Token: {
