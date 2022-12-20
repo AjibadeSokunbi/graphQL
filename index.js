@@ -3,23 +3,31 @@
 // 2. you can fecth the name of the token, the tokenid and the contract address through the ERC721Token node
 //......................................................................
 
-
 // import the required dependencies
+
 import { ApolloServer, gql } from "apollo-server";
 import fetch from "node-fetch";
 
-//define the type definitions 
+//define the type definitions
 const typeDefs = gql`
   type Query {
-    wallet(address: String): Wallet
+    wallet(address: String, after: String): Wallet
   }
 
   type Wallet {
-    tokens: TokenConnection
+    tokens(after: String): TokenConnection
   }
 
   type TokenConnection {
+    pageInfo: PageInfo
     edges: [TokenEdge]
+  }
+
+  type PageInfo {
+    endCursor: String
+    hasNextPage: Boolean
+    hasPreviousPage: Boolean
+    startCursor: String
   }
 
   type TokenEdge {
@@ -52,95 +60,44 @@ const typeDefs = gql`
     node: Log
   }
 
-  enum LogType {
-    MINT
-    ORDER
-    TRANSFER
-  }
 
-  interface Log {
-    blockNumber: Int
-    estimatedConfirmedAt: String
-  }
-
-  type MintLog implements Log {
-    blockNumber: Int
-    estimatedConfirmedAt: String
+  type Log {
     transaction: Transaction
-    type: LogType!
-  }
-
-  type TransferLog implements Log {
-    blockNumber: Int
-    estimatedConfirmedAt: String
-    transaction: Transaction
-    type: LogType!
-  }
-
-  type OrderLog implements Log {
-    blockNumber: Int
-    estimatedConfirmedAt: String
-    transaction: Transaction
-    type: LogType!
+    transactionHash: String
+    type: String
   }
 
   type Transaction {
     valueInEth: Float
+    blockNumber: Int
+    estimatedConfirmedAt: String
   }
 `;
 
 //the resolvers contains the query object and istypeof of the ERC721Token and the log respectively
 const resolvers = {
-  //lets the GraphQL server to determine the correct type of the ERC721Token at runtime.
+   //lets the GraphQL server to determine the correct type of the ERC721Token at runtime.
   ERC721Token: {
     __isTypeOf(obj) {
       return obj.tokenId !== undefined;
     },
   },
-  //lets the GraphQL server to determine the correct type of the logs at runtime.
-  Log: {
-    __resolveType(log) {
-      if (log.type === "MINT") {
-        return "MintLog";
-      } else if (log.type === "TRANSFER") {
-        return "TransferLog";
-      } else if (log.type === "ORDER") {
-        return "OrderLog";
-      }
-      return null;
-    },
-  },
-  //lets the GraphQL server to determine the correct type of the mintlogs at runtime.
-  MintLog: {
-    __isTypeOf(obj) {
-      return obj.type === "MINT";
-    },
-  },
-  //lets the GraphQL server to determine the correct type of the transferlogs at runtime.
-  TransferLog: {
-    __isTypeOf(obj) {
-      return obj.type === "TRANSFER";
-    },
-  },
-  //lets the GraphQL server to determine the correct type of the order-logs at runtime.
-  OrderLog: {
-    __isTypeOf(obj) {
-      return obj.type === "ORDER";
-    },
-  },
-
   Query: {
-    // wallet function takes in an address that fetches data from the icytool endpoint and returns the response
-    wallet: (_, { address }) => {
+    wallet: (_, { address, after }) => {
       return fetch(`https://graphql.icy.tools/graphql`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          // the query from the endpoint
           query: `
-            query($address: String!) {
+            query($address: String, $after: String) {
               wallet(address: $address) {
-                tokens {
+                tokens(after: $after) {
+                  pageInfo {
+                    endCursor
+                    hasNextPage
+                    hasPreviousPage
+                    startCursor
+                  }
                   edges {
                     node {
                       ... on ERC721Token {
@@ -152,26 +109,13 @@ const resolvers = {
                         logs {
                           edges {
                             node {
-                              blockNumber
-                              estimatedConfirmedAt
-                              ... on MintLog {
-                                transaction {
-                                  valueInEth
-                                }
-                                type
+                              transaction {
+                                valueInEth
+                                blockNumber
+                                estimatedConfirmedAt
                               }
-                              ... on TransferLog {
-                                transaction {
-                                  valueInEth
-                                }
-                                type
-                              }
-                              ... on OrderLog {
-                                transaction {
-                                  valueInEth
-                                }
-                                type
-                              }
+                              transactionHash
+                              type
                             }
                           }
                         }
@@ -183,14 +127,13 @@ const resolvers = {
             }
           `,
           // required variable input to query the data
-          variables: { address },
+          variables: { address, after },
         }),
       })
         .then((res) => res.json())
         .then((res) => res.data.wallet)
         .catch((error) => {
           console.error(error);
-          // handles the error
         });
     },
   },
@@ -199,9 +142,6 @@ const resolvers = {
 //the server takes in two arguements, the typedefs and the resolvers
 const server = new ApolloServer({ typeDefs, resolvers });
 
-//start the server
 server.listen().then(({ url }) => {
   console.log(`Server ready at ${url}`);
 });
-
-
